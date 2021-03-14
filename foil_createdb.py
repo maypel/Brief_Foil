@@ -33,7 +33,7 @@ sql_query1 = """SELECT COUNT(rowid)
 
 sql_query2 = """DELETE
                 FROM mesure
-                WHERE rowid < 10;"""
+                WHERE rowid IN (Select rowid from mesure limit 12);"""
 
 last_mesure_113 = '''
 SELECT *
@@ -81,7 +81,8 @@ def create_connection(db_file):
 def create_table(conn, sql_create):
     try:
         cursor = conn.cursor()
-        cursor.execute(sql_create)    
+        cursor.execute(sql_create)
+        print("table créée avec succès")    
         conn.commit()
 
     except sqlite3.OperationalError:
@@ -129,21 +130,21 @@ def inserer_donnees_mesure(conn, inserer_mesure, liste_station):
     print("Les données ont été insérées avec succès")
 
 
-def backupdb(status, remaining, total, db_file):
+def backupdb(db_file):
     try:
         # existing DB
-        sqliteCon = sqlite3.connect(db_file)
+        conn = sqlite3.connect(db_file)
         # copy into this DB
-        backupCon = sqlite3.connect('data/Sqlite_backup.db')
-        with backupCon:
-            sqliteCon.backup(backupCon, pages=3, progress=progress)
-        print("backup successful")
-    except sqlite3.Error as error:
-        print("Error while taking backup: ", error)
-    finally:
-        if backupCon:
-            backupCon.close()
-        
+        with open('data/foildump.sql', 'w') as f:
+            for line in conn.iterdump():
+                f.write('%s\n' % line)
+        print("données sauvegardées")
+
+    except sqlite3.Error as e:
+        print(e)
+        return
+    
+       
 
 def query_count(conn, sql_query):
     
@@ -156,7 +157,13 @@ def query_count(conn, sql_query):
     except sqlite3.Error as e:
         print("Erreur dans le compte des données")
         print(e)
+
+def delete_row(sql_query):
     
+    with sqlite3.connect('data/foil.db') as db:
+        cursor = db.cursor()
+        cursor.execute(sql_query)
+        print("données supprimées")
 
 def main():
     # connection/création de la BDD Foil.db
@@ -169,17 +176,17 @@ def main():
 
     while True:
         # requete pour insérer données dans la table mesure
-        inserer_donnees_mesure(conn, inserer_mesure, liste_station)
         i +=1
-        
         variable = query_count(conn, sql_query1) 
+        inserer_donnees_mesure(conn, inserer_mesure, liste_station)
+
+        if i % 5 == 0:
+            backupdb('data/foil.db')
         
-        if variable > 5:
-            backupdb(status, remaining, total, db_file)
-
-        else:
-            continue
-
+        elif i % 12 == 0:
+            delete_row(sql_query2)
+            print("time to delete")
+        
         
         last_mesures_113 = pd.read_sql_query(last_mesure_113, conn)
         list_last_mesures_113 = last_mesures_113.values.tolist()
@@ -198,9 +205,8 @@ def main():
         filename = "html/index.html"
         with open(filename, 'w') as dashboard:
             dashboard.write(template.render(data_mesures_113=list_last_mesures_113, data_mesures_307=list_last_mesures_307, data_mesures_308=list_last_mesures_308))
-        time.sleep(15)
-
-
+        print("données dans template")
+        time.sleep(60)
 
 if __name__ == '__main__':
     main()
