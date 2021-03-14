@@ -1,0 +1,5 @@
+jupyterlab
+sqlite3
+requests
+json
+os
